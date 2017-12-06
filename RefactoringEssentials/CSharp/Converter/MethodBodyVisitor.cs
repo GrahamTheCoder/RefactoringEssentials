@@ -37,7 +37,7 @@ namespace RefactoringEssentials.CSharp.Converter
 				var cSharpEquivalent = node.StopOrEndKeyword.IsKind(VBasic.SyntaxKind.StopKeyword) ? "System.Diagnostics.Debugger.Break();"
 					: node.StopOrEndKeyword.IsKind(VBasic.SyntaxKind.EndKeyword) ? "System.Environment.Exit(0);"
 						: throw new NotImplementedException(node.StopOrEndKeyword.Kind() + " not implemented!");
-				return SingleStatement(SyntaxFactory.ParseStatement(cSharpEquivalent));
+				return SingleStatement(SyntaxFactory.ParseStatement(cSharpEquivalent)).WithConvertedTriviaFrom(node));
 			}
 
 			public override SyntaxList<StatementSyntax> VisitLocalDeclarationStatement(VBSyntax.LocalDeclarationStatementSyntax node)
@@ -48,7 +48,7 @@ namespace RefactoringEssentials.CSharp.Converter
 
 				foreach (var declarator in node.Declarators)
 					foreach (var decl in SplitVariableDeclarations(declarator, nodesVisitor, semanticModel))
-						declarations.Add(SyntaxFactory.LocalDeclarationStatement(modifiers, decl.Value));
+						declarations.Add(SyntaxFactory.LocalDeclarationStatement(modifiers, decl.Value).WithConvertedTriviaFrom(node));
 
 				return SyntaxFactory.List<StatementSyntax>(declarations);
 			}
@@ -58,40 +58,42 @@ namespace RefactoringEssentials.CSharp.Converter
 				var syntaxKind = node.Kind() == VBasic.SyntaxKind.AddHandlerStatement ? SyntaxKind.AddAssignmentExpression : SyntaxKind.SubtractAssignmentExpression;
 				return SingleStatement(SyntaxFactory.AssignmentExpression(syntaxKind,
 					(ExpressionSyntax) node.EventExpression.Accept(nodesVisitor),
-					(ExpressionSyntax) node.DelegateExpression.Accept(nodesVisitor)));
+					(ExpressionSyntax) node.DelegateExpression.Accept(nodesVisitor))
+					.WithConvertedTriviaFrom(node));
 			}
 
 			public override SyntaxList<StatementSyntax> VisitExpressionStatement(VBSyntax.ExpressionStatementSyntax node)
 			{
-				return SingleStatement((ExpressionSyntax)node.Expression.Accept(nodesVisitor));
+				return SingleStatement((ExpressionSyntax)node.Expression.Accept(nodesVisitor).WithConvertedTriviaFrom(node));
 			}
 
 			public override SyntaxList<StatementSyntax> VisitAssignmentStatement(VBSyntax.AssignmentStatementSyntax node)
 			{
 				var kind = ConvertToken(node.Kind(), TokenContext.Local);
-				return SingleStatement(SyntaxFactory.AssignmentExpression(kind, (ExpressionSyntax)node.Left.Accept(nodesVisitor), (ExpressionSyntax)node.Right.Accept(nodesVisitor)));
+				return SingleStatement(SyntaxFactory.AssignmentExpression(kind, (ExpressionSyntax)node.Left.Accept(nodesVisitor), (ExpressionSyntax)node.Right.Accept(nodesVisitor))
+					.WithConvertedTriviaFrom(node));
 			}
 
 			public override SyntaxList<StatementSyntax> VisitThrowStatement(VBSyntax.ThrowStatementSyntax node)
 			{
-				return SingleStatement(SyntaxFactory.ThrowStatement((ExpressionSyntax)node.Expression?.Accept(nodesVisitor)));
+				return SingleStatement(SyntaxFactory.ThrowStatement((ExpressionSyntax)node.Expression?.Accept(nodesVisitor)).WithConvertedTriviaFrom(node));
 			}
 
 			public override SyntaxList<StatementSyntax> VisitReturnStatement(VBSyntax.ReturnStatementSyntax node)
 			{
-                if (IsIterator)
-                    return SingleStatement(SyntaxFactory.YieldStatement(SyntaxKind.YieldBreakStatement));
-                return SingleStatement(SyntaxFactory.ReturnStatement((ExpressionSyntax)node.Expression?.Accept(nodesVisitor)));
-            }
+				if (IsIterator)
+					return SingleStatement(SyntaxFactory.YieldStatement(SyntaxKind.YieldBreakStatement).WithConvertedTriviaFrom(node));
+				return SingleStatement(SyntaxFactory.ReturnStatement((ExpressionSyntax)node.Expression?.Accept(nodesVisitor)).WithConvertedTriviaFrom(node));
+			}
 
             public override SyntaxList<StatementSyntax> VisitContinueStatement(VBSyntax.ContinueStatementSyntax node)
             {
-                return SingleStatement(SyntaxFactory.ContinueStatement());
+                return SingleStatement(SyntaxFactory.ContinueStatement().WithConvertedTriviaFrom(node));
             }
 
             public override SyntaxList<StatementSyntax> VisitYieldStatement(VBSyntax.YieldStatementSyntax node)
 			{
-				return SingleStatement(SyntaxFactory.YieldStatement(SyntaxKind.YieldReturnStatement, (ExpressionSyntax)node.Expression?.Accept(nodesVisitor)));
+				return SingleStatement(SyntaxFactory.YieldStatement(SyntaxKind.YieldReturnStatement, (ExpressionSyntax)node.Expression?.Accept(nodesVisitor)).WithConvertedTriviaFrom(node));
 			}
 
 			public override SyntaxList<StatementSyntax> VisitExitStatement(VBSyntax.ExitStatementSyntax node)
@@ -99,7 +101,7 @@ namespace RefactoringEssentials.CSharp.Converter
 				switch (VBasic.VisualBasicExtensions.Kind(node.BlockKeyword))
 				{
 					case VBasic.SyntaxKind.SubKeyword:
-						return SingleStatement(SyntaxFactory.ReturnStatement());
+						return SingleStatement(SyntaxFactory.ReturnStatement().WithConvertedTriviaFrom(node));
 					case VBasic.SyntaxKind.FunctionKeyword:
 						VBasic.VisualBasicSyntaxNode typeContainer = (VBasic.VisualBasicSyntaxNode)node.Ancestors().OfType<VBSyntax.LambdaExpressionSyntax>().FirstOrDefault()
 							?? node.Ancestors().OfType<VBSyntax.MethodBlockSyntax>().FirstOrDefault();
@@ -117,9 +119,9 @@ namespace RefactoringEssentials.CSharp.Converter
 							expr = SyntaxFactory.DefaultExpression(SyntaxFactory.ParseTypeName(info.ToMinimalDisplayString(semanticModel, node.SpanStart)));
 						else
 							throw new NotSupportedException();
-						return SingleStatement(SyntaxFactory.ReturnStatement(expr));
+						return SingleStatement(SyntaxFactory.ReturnStatement(expr).WithConvertedTriviaFrom(node));
 					default:
-                        return SingleStatement(SyntaxFactory.BreakStatement());
+						return SingleStatement(SyntaxFactory.BreakStatement().WithConvertedTriviaFrom(node));
 				}
 			}
 
@@ -132,7 +134,7 @@ namespace RefactoringEssentials.CSharp.Converter
                             SyntaxFactory.MemberBindingExpression(SyntaxFactory.IdentifierName("Invoke")),
                             (ArgumentListSyntax)node.ArgumentList.Accept(nodesVisitor)
                         )
-                    )
+                    ).WithConvertedTriviaFrom(node)
                 );
             }
 
@@ -147,7 +149,7 @@ namespace RefactoringEssentials.CSharp.Converter
 					var elseBlock = SyntaxFactory.Block(node.ElseClause.Statements.SelectMany(s => s.Accept(this)));
 					elseClause = SyntaxFactory.ElseClause(elseBlock.UnpackBlock());
 				}
-				return SingleStatement(SyntaxFactory.IfStatement(condition, block.UnpackBlock(), elseClause));
+				return SingleStatement(SyntaxFactory.IfStatement(condition, block.UnpackBlock(), elseClause).WithConvertedTriviaFrom(node));
 			}
 
 			public override SyntaxList<StatementSyntax> VisitMultiLineIfBlock(VBSyntax.MultiLineIfBlockSyntax node)
@@ -169,7 +171,7 @@ namespace RefactoringEssentials.CSharp.Converter
 					elseClause = SyntaxFactory.ElseClause(ifStmt);
 				}
 
-				return SingleStatement(SyntaxFactory.IfStatement(condition, block.UnpackBlock(), elseClause));
+				return SingleStatement(SyntaxFactory.IfStatement(condition, block.UnpackBlock(), elseClause).WithConvertedTriviaFrom(node));
 			}
 
 			public override SyntaxList<StatementSyntax> VisitForBlock(VBSyntax.ForBlockSyntax node)
@@ -219,7 +221,7 @@ namespace RefactoringEssentials.CSharp.Converter
 					declaration != null ? SyntaxFactory.SeparatedList<ExpressionSyntax>() : SyntaxFactory.SingletonSeparatedList(startValue),
 					condition,
 					SyntaxFactory.SingletonSeparatedList(step),
-					block.UnpackBlock()));
+					block.UnpackBlock()).WithConvertedTriviaFrom(node));
 			}
 
 			public override SyntaxList<StatementSyntax> VisitForEachBlock(VBSyntax.ForEachBlockSyntax node)
@@ -248,7 +250,7 @@ namespace RefactoringEssentials.CSharp.Converter
 						id,
 						(ExpressionSyntax)stmt.Expression.Accept(nodesVisitor),
 						block.UnpackBlock()
-					));
+					).WithConvertedTriviaFrom(node));
 			}
 
 			public override SyntaxList<StatementSyntax> VisitSelectBlock(VBSyntax.SelectBlockSyntax node)
@@ -256,7 +258,7 @@ namespace RefactoringEssentials.CSharp.Converter
 				var expr = (ExpressionSyntax)node.SelectStatement.Expression.Accept(nodesVisitor);
 				SwitchStatementSyntax switchStatement;
 				if (ConvertToSwitch(expr, node.CaseBlocks, out switchStatement))
-					return SingleStatement(switchStatement);
+					return SingleStatement(switchStatement.WithConvertedTriviaFrom(node));
 				throw new NotSupportedException();
 			}
 
@@ -274,7 +276,7 @@ namespace RefactoringEssentials.CSharp.Converter
 						SyntaxFactory.SingletonSeparatedList(variableDeclaratorSyntax)));
 					var statements = node.Statements.SelectMany(s => s.Accept(this));
 
-					return SingleStatement(SyntaxFactory.Block(new[] {declaration}.Concat(statements).ToArray()));
+					return SingleStatement(SyntaxFactory.Block(new[] {declaration}.Concat(statements).ToArray())).WithConvertedTriviaFrom(node));
 				}
 				finally
 				{
@@ -321,7 +323,7 @@ namespace RefactoringEssentials.CSharp.Converter
 						block,
 						SyntaxFactory.List(node.CatchBlocks.Select(c => (CatchClauseSyntax)c.Accept(nodesVisitor))),
 						(FinallyClauseSyntax)node.FinallyBlock?.Accept(nodesVisitor)
-					)	
+					).WithConvertedTriviaFrom(node)
 				);
 			}
 
@@ -330,7 +332,7 @@ namespace RefactoringEssentials.CSharp.Converter
 				return SingleStatement(SyntaxFactory.LockStatement(
 					(ExpressionSyntax)node.SyncLockStatement.Expression.Accept(nodesVisitor),
 					SyntaxFactory.Block(node.Statements.SelectMany(s => s.Accept(this))).UnpackBlock()
-				));
+				).WithConvertedTriviaFrom(node));
 			}
 
 			public override SyntaxList<StatementSyntax> VisitUsingBlock(VBSyntax.UsingBlockSyntax node)
@@ -340,10 +342,11 @@ namespace RefactoringEssentials.CSharp.Converter
 					foreach (var v in node.UsingStatement.Variables.Reverse())
 						foreach (var declaration in SplitVariableDeclarations(v, nodesVisitor, semanticModel).Values.Reverse())
 							stmt = SyntaxFactory.UsingStatement(declaration, null, stmt);
-					return SingleStatement(stmt);
+					return SingleStatement(stmt.WithConvertedTriviaFrom(node));
 				} else {
 					var expr = (ExpressionSyntax)node.UsingStatement.Expression.Accept(nodesVisitor);
-					return SingleStatement(SyntaxFactory.UsingStatement(null, expr, SyntaxFactory.Block(node.Statements.SelectMany(s => s.Accept(this))).UnpackBlock()));
+					return SingleStatement(SyntaxFactory.UsingStatement(null, expr, SyntaxFactory.Block(node.Statements.SelectMany(s => s.Accept(this))).UnpackBlock())
+						.WithConvertedTriviaFrom(node));
 				}
 			}
 
@@ -352,7 +355,7 @@ namespace RefactoringEssentials.CSharp.Converter
 				return SingleStatement(SyntaxFactory.WhileStatement(
 					(ExpressionSyntax)node.WhileStatement.Condition.Accept(nodesVisitor),
 					SyntaxFactory.Block(node.Statements.SelectMany(s => s.Accept(this))).UnpackBlock()
-                ));
+				).WithConvertedTriviaFrom(node));
 			}
 
 			public override SyntaxList<StatementSyntax> VisitDoLoopBlock(VBSyntax.DoLoopBlockSyntax node)
@@ -364,12 +367,12 @@ namespace RefactoringEssentials.CSharp.Converter
 						return SingleStatement(SyntaxFactory.WhileStatement(
 							(ExpressionSyntax)stmt.Condition.Accept(nodesVisitor),
 							SyntaxFactory.Block(node.Statements.SelectMany(s => s.Accept(this))).UnpackBlock()
-                        ));
+						).WithConvertedTriviaFrom(node));
 					else
 						return SingleStatement(SyntaxFactory.WhileStatement(
 							SyntaxFactory.PrefixUnaryExpression(SyntaxKind.LogicalNotExpression, (ExpressionSyntax)stmt.Condition.Accept(nodesVisitor)),
 							SyntaxFactory.Block(node.Statements.SelectMany(s => s.Accept(this))).UnpackBlock()
-                        ));
+						).WithConvertedTriviaFrom(node));
 				}
 				if (node.LoopStatement.WhileOrUntilClause != null)
 				{
@@ -378,12 +381,12 @@ namespace RefactoringEssentials.CSharp.Converter
 						return SingleStatement(SyntaxFactory.DoStatement(
 							SyntaxFactory.Block(node.Statements.SelectMany(s => s.Accept(this))).UnpackBlock(),
 							(ExpressionSyntax)stmt.Condition.Accept(nodesVisitor)
-						));
+						).WithConvertedTriviaFrom(node));
 					else
 						return SingleStatement(SyntaxFactory.DoStatement(
 							SyntaxFactory.Block(node.Statements.SelectMany(s => s.Accept(this))).UnpackBlock(),
 							SyntaxFactory.PrefixUnaryExpression(SyntaxKind.LogicalNotExpression, (ExpressionSyntax)stmt.Condition.Accept(nodesVisitor))
-						));
+						).WithConvertedTriviaFrom(node));
 				}
 				throw new NotSupportedException();
 			}
