@@ -16,16 +16,14 @@ namespace RefactoringEssentials.CSharp.Converter
 		class NodesVisitor : VBasic.VisualBasicSyntaxVisitor<CSharpSyntaxNode>
 		{
 			SemanticModel semanticModel;
-			Document targetDocument;
 			private static Lazy<Dictionary<ITypeSymbol, string>> createConvertMethodsLookupByReturnType;
 			readonly Dictionary<MemberDeclarationSyntax, MemberDeclarationSyntax[]> additionalDeclarations = new Dictionary<MemberDeclarationSyntax, MemberDeclarationSyntax[]>();
 			private readonly Stack<string> withBlockTempVariableNames = new Stack<string>();
 			readonly IDictionary<string, string> importedNamespaces;
 
-			public NodesVisitor(SemanticModel semanticModel, Document targetDocument)
+			public NodesVisitor(SemanticModel semanticModel)
 			{
 				this.semanticModel = semanticModel;
-				this.targetDocument = targetDocument;
 				importedNamespaces = new Dictionary<string, string> {{VBasic.VisualBasicExtensions.RootNamespace(semanticModel.Compilation).ToString(), ""}};
 				if (createConvertMethodsLookupByReturnType == default(Lazy<Dictionary<ITypeSymbol, string>>))
 				{
